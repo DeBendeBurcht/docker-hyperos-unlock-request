@@ -7,21 +7,21 @@
 > This fork features an embedded Docker Compose setup for **TrueNAS Custom Apps**, avoiding external `git` clones by writing the script locally, running a live verification test, and looping nightly until approved.
 > 
 > **Quick Setup & Behavior:**
-> 1. Paste [`docker-compose.yml`](./docker-compose.yml) into a new **TrueNAS Custom App** (YAML install).
+> 1. In TrueNAS, go to **Apps → Discover Apps → Custom App** (Install via YAML), name it **`hyperos-unlocker`**, and paste [`docker-compose.yml`](./docker-compose.yml).
 > 2. Under `environment:`, replace `YOUR_TOKEN_HERE` in `COOKIE_DATA: "new_bbs_serviceToken=YOUR_TOKEN_HERE;"` with your token (keep `new_bbs_serviceToken=` and trailing `;"`). See [Getting your cookie](#getting-your-cookie).
 > 3. **Auto-Shutdown on Success:** Runs nightly at `00:00:00` Beijing time. Upon approval, it exits cleanly (`exit 0`) and `restart: "on-failure"` stops the container. *(No email is sent by Xiaomi—check container logs or app status in TrueNAS).*
 > 4. **Optional Email Alert (via TrueNAS Cron Job):** Because Xiaomi does not send approval emails, you can have TrueNAS email you automatically when the container stops:
 >    * Go to **System Settings → Advanced → Cron Jobs → Add**.
 >    * **Command:**
 >      ```bash
->      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'xiaomi|unlocker' || echo "HyperOS Unlocker container has stopped (Likely APPROVED!)"
+>      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'hyperos|unlocker' || echo "HyperOS Unlocker container has stopped (Likely APPROVED!)"
 >      ```
 >    * **Run As User:** `root`
 >    * **Schedule:** Daily (e.g., 5 minutes after `00:00` Beijing time in your local timezone, such as `5 17 * * *` for CET).
 >    * **Uncheck "Hide Standard Output"** so TrueNAS emails the message once the container stops. *(Delete the Cron Job after receiving your approval email).*
 >    * **Verify your Cron Job (Optional):** To test that TrueNAS properly detects the running container before switching to the alert command above, temporarily run this inverse command with **Run Now**:
 >      ```bash
->      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'xiaomi|unlocker' && echo "TEST SUCCESS: TrueNAS sees the running xiaomi-unlocker container!"
+>      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'hyperos|unlocker' && echo "TEST SUCCESS: TrueNAS sees the running xiaomi-unlocker container!"
 >      ```
 >      Once you receive the test email, switch `&&` back to `||` with the approval message above so it stays silent until the container stops.
 > 
