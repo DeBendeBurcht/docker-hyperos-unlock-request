@@ -1,18 +1,18 @@
-[![TrueNAS Compatible](https://img.shields.io/badge/TrueNAS-Custom%20App-blue?style=flat-square&logo=truenas)](https://www.truenas.com/)
-[![AI-Assisted Setup](https://img.shields.io/badge/Written%20with-AI-purple?style=flat-square)](https://github.com/hediondom/hyperos-unlock-request)
+[![TrueNAS Compatible](https://shields.io)](https://truenas.com)
+[![AI-Assisted Setup](https://shields.io)](https://github.com)
 
 > [!NOTE]
 > **TrueNAS & Self-Contained Deployment Variant**
 > 
-> This fork includes an embedded, self-contained Docker Compose deployment configured specifically for **TrueNAS Custom Apps**. It avoids external `git` clone dependencies by writing the Python script locally on boot, executing an automated **one-time live test request** to verify your token and network path, and then transitioning into an automated midnight sniper loop until approved.
+> This fork features an embedded Docker Compose setup for **TrueNAS Custom Apps**, avoiding external `git` clones by writing the script locally, running a live verification test, and looping nightly until approved.
 > 
 > **Quick Setup & Behavior:**
-> 1. Copy the contents of [`docker-compose.yml`](./docker-compose.yml) into a new **TrueNAS Custom App** (Install via YAML).
-> 2. Paste your `new_bbs_serviceToken` into the `COOKIE_DATA` environment variable at the bottom of the file (see [Getting your cookie](#getting-your-cookie) below) and deploy.
-> 3. **Auto-Shutdown on Success:** The container runs hands-free every night at `00:00:00` Beijing time. Once your account is approved, the script exits cleanly (`exit 0`) and `restart: "on-failure"` automatically stops the container so it stops sending requests. *(Note: Xiaomi does not send an approval email—check the container logs or see the app stop to confirm success.)*
+> 1. Paste [`docker-compose.yml`](./docker-compose.yml) into a new **TrueNAS Custom App** (YAML install).
+> 2. Under `environment:`, replace `YOUR_TOKEN_HERE` in `COOKIE_DATA: "new_bbs_serviceToken=YOUR_TOKEN_HERE;"` with your token (keep `new_bbs_serviceToken=` and trailing `;"`). See [Getting your cookie](#getting-your-cookie).
+> 3. **Auto-Shutdown on Success:** Runs nightly at `00:00:00` Beijing time. Upon approval, it exits cleanly (`exit 0`) and `restart: "on-failure"` stops the container. *(No email is sent by Xiaomi—check container logs or app status in TrueNAS).*
 > 
-> * **AI Assistance Notice:** This deployment wrapper and configuration were generated with AI assistance to streamline TrueNAS containerization.
-> * **Disclaimer:** Use this tool entirely at your own risk. The author and contributors are **not liable** for any device bricks, account bans, Xiaomi server restrictions, warranty voids, or data loss resulting from its use.
+> * **AI Assistance Notice:** Generated with AI assistance to streamline TrueNAS containerization.
+> * **Disclaimer:** Use at your own risk. The author/contributors are **not liable** for device bricks, bans, server restrictions, voided warranties, or data loss.
 
 ---
 
