@@ -1,0 +1,244 @@
+version: '3.8'
+
+services:
+  xiaomi-unlocker:
+    image: python:3.11-slim
+    container_name: hyperos-unlocker
+    restart: "unless-stopped"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /app /app/logs
+        pip install --no-cache-dir requests ntplib
+        echo "$$COOKIE_DATA" > /app/cookie.txt
+        
+        echo "=== Writing embedded script ==="
+        cat << 'EOF' > /app/hyperos_unlock_request.py
+        # -*- coding: utf-8 -*-
+        from __future__ import annotations
+        import argparse, json, statistics, sys, threading, time
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+        try:
+            import requests
+        except ImportError:
+            sys.exit("Missing dependency 'requests'.")
+        try:
+            import ntplib
+        except ImportError:
+            ntplib = None
+
+        for _s in (sys.stdout, sys.stderr):
+            if hasattr(_s, "reconfigure"):
+                try: _s.reconfigure(errors="replace")
+                except Exception: pass
+
+        BASE = "https://sgp-api.buy.mi.com"
+        APPLY_URL = BASE + "/bbs/api/global/apply/bl-auth"
+        STATE_URL = BASE + "/bbs/api/global/user/bl-switch/state"
+        BODY = json.dumps({"is_retry": False})
+        BEIJING = timezone(timedelta(hours=8))
+        NTP_SERVERS = ("time.google.com", "pool.ntp.org", "time.windows.com")
+        DEFAULT_OFFSETS_MS = [30, 60, 100, 150, 200, 300]
+
+        ntp_offset = 0.0
+        _anchor_wall = time.time()
+        _anchor_perf = time.perf_counter()
+
+        def _set_anchor(offset: float) -> None:
+            global _anchor_wall, _anchor_perf
+            _anchor_perf = time.perf_counter()
+            _anchor_wall = time.time() + offset
+
+        def now() -> float:
+            return _anchor_wall + (time.perf_counter() - _anchor_perf)
+
+        def fmt_beijing(ts: float) -> str:
+            return datetime.fromtimestamp(ts, BEIJING).strftime("%H:%M:%S.%f")[:-3]
+
+        def fmt_local(ts: float, with_date: bool = True) -> str:
+            dt = datetime.fromtimestamp(ts).astimezone()
+            off = dt.utcoffset() or timedelta(0)
+            sign = "-" if off < timedelta(0) else "+"
+            mins = abs(int(off.total_seconds())) // 60
+            zone = f"UTC{sign}{mins // 60:02d}:{mins % 60:02d}"
+            return f"{dt:%Y-%m-%d %H:%M:%S} ({zone})" if with_date else f"{dt:%H:%M:%S} ({zone})"
+
+        def sync_ntp(skip: bool = False) -> None:
+            global ntp_offset
+            if skip or ntplib is None:
+                _set_anchor(0.0)
+                return
+            client = ntplib.NTPClient()
+            offsets = []
+            for server in NTP_SERVERS:
+                try:
+                    offsets.append(client.request(server, version=3, timeout=3).offset)
+                except Exception:
+                    pass
+            if offsets:
+                ntp_offset = statistics.median(offsets)
+                _set_anchor(ntp_offset)
+                print(f"[NTP] Clock offset: {ntp_offset * 1000:+.0f} ms")
+            else:
+                _set_anchor(0.0)
+
+        def next_beijing_midnight() -> float:
+            n = datetime.fromtimestamp(now(), BEIJING)
+            return (n + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+
+        def wait_until(target: float) -> None:
+            while True:
+                remaining = target - now()
+                if remaining <= 0: return
+                if remaining > 0.05: time.sleep(remaining - 0.03)
+                else: time.sleep(0)
+
+        def load_cookie(path: Path) -> str:
+            if not path.exists():
+                sys.exit(f"Cookie file not found at: {path}")
+            cookie = path.read_text(encoding="utf-8").strip()
+            if cookie.lower().startswith("cookie:"): cookie = cookie[7:].strip()
+            if "=" not in cookie: cookie = f"new_bbs_serviceToken={cookie};"
+            return cookie
+
+        def make_session(cookie: str) -> requests.Session:
+            s = requests.Session()
+            s.headers.update({
+                "Accept": "application/json", "Accept-Encoding": "gzip",
+                "Connection": "Keep-Alive", "Content-Type": "application/json; charset=utf-8",
+                "Cookie": cookie, "User-Agent": "okhttp/4.12.0",
+            })
+            return s
+
+        def _json(resp: requests.Response):
+            try: j = resp.json()
+            except ValueError: return None
+            return j if isinstance(j, dict) else None
+
+        def check_state(session: requests.Session) -> tuple[str, str]:
+            try: resp = session.get(STATE_URL, timeout=10)
+            except Exception as e: return "error", f"Network error: {e}"
+            j = _json(resp)
+            if j is None: return "error", f"HTTP {resp.status_code}"
+            if j.get("code") == 100004 or j.get("msg") == "need login": return "expired", "Cookie expired."
+            data = j.get("data") or {}
+            is_pass, button, deadline = data.get("is_pass"), data.get("button_state"), data.get("deadline_format", "")
+            if is_pass == 1: return "approved", f"APPROVED until {deadline}"
+            if is_pass == 4:
+                if button == 1: return "can_apply", "Account can apply (normal)."
+                if button == 2: return "blocked", f"Blocked until {deadline}"
+                if button == 3: return "too_new", "Account under 30 days old."
+            return "unknown", f"Status: {json.dumps(j)}"
+
+        def describe(resp: requests.Response) -> tuple[str, str, float | None]:
+            j = _json(resp)
+            if j is None: return "other", f"HTTP {resp.status_code} | non-JSON: {resp.text[:120]!r}", None
+            code, data = j.get("code"), j.get("data") or {}
+            result, deadline = data.get("apply_result"), data.get("deadline")
+            deadline = float(deadline) if isinstance(deadline, (int, float)) and deadline > 0 else None
+            head = f"HTTP {resp.status_code} | code={code} | apply_result={result}"
+            if result == 1: return "approved", f"{head} | APPROVED!", deadline
+            if result == 3: return "quota", f"{head} | Quota limit reached (API verified working)", deadline
+            return "other", f"{head} | Result message: {json.dumps(j, ensure_ascii=False)}", deadline
+
+        def measure_rtt(session: requests.Session, n: int = 6) -> float:
+            samples = []
+            for i in range(n + 1):
+                try:
+                    t0 = time.perf_counter()
+                    session.head(BASE, timeout=5)
+                    if i > 0: samples.append(time.perf_counter() - t0)
+                except Exception: pass
+            return statistics.median(samples) if samples else 0.350
+
+        def warm_all(sessions: list, http_timeout: float = 8, deadline: float | None = None) -> tuple[float, list]:
+            done = [False] * len(sessions)
+            def hit(i, s):
+                try: s.head(BASE, timeout=http_timeout)
+                except Exception: pass
+                done[i] = True
+            t0 = time.perf_counter()
+            threads = [threading.Thread(target=hit, args=(i, s), daemon=True) for i, s in enumerate(sessions)]
+            for t in threads: t.start()
+            for t in threads: t.join(timeout=http_timeout + 2 if deadline is None else max(0.0, deadline - now()))
+            return time.perf_counter() - t0, [i + 1 for i, d in enumerate(done) if not d]
+
+        def fire(idx: int, session: requests.Session, send_at: float, offset_ms: int, target: float, results: list, rehearsal: bool) -> None:
+            if not rehearsal:
+                wait_until(send_at)
+            sent = now()
+            jitter_ms = (sent - send_at) * 1000 if not rehearsal else 0.0
+            try:
+                resp = session.post(APPLY_URL, data=BODY, timeout=10)
+                kind, text, _ = describe(resp)
+            except Exception as e:
+                kind, text = "other", f"Error: {e}"
+            results.append((idx, kind))
+            prefix = "[BOOT LIVE TEST]" if rehearsal else f"[Shot {idx} {offset_ms:+d}ms]"
+            print(f"{prefix} sent {fmt_beijing(sent)} Beijing | {text}")
+
+        def main():
+            cookie = load_cookie(Path("/app/cookie.txt"))
+            sync_ntp()
+            session = make_session(cookie)
+
+            print("=== 1. Testing token validity ===")
+            state, text = check_state(session)
+            print(f"[Status] {text}")
+
+            print("=== 2. Running live API connection test shot ===")
+            results_test = []
+            fire(1, session, now(), 0, now(), results_test, rehearsal=True)
+            print("Boot test finished. Entering permanent live midnight sniper loop...")
+
+            while True:
+                target = next_beijing_midnight()
+                print(f"[Target] Next reset at 00:00:00 Beijing = {fmt_local(target)}")
+                
+                offsets = [30, 60, 100, 150, 200, 300]
+                sessions = [make_session(cookie) for _ in offsets]
+
+                def countdown_until(t_stop: float) -> None:
+                    while now() < t_stop:
+                        time.sleep(min(1.0, max(t_stop - now(), 0)))
+
+                countdown_until(target - 60)
+                print("[Prep] Re-syncing clock & opening connections...")
+                sync_ntp()
+                warm_all(sessions)
+                rtt = measure_rtt(sessions[0], 6)
+                one_way = rtt / 2
+
+                first_send = target - one_way + offsets[0] / 1000
+                countdown_until(target - 5)
+                warm_all(sessions, http_timeout=4, deadline=first_send - 0.5)
+
+                results = []
+                threads = []
+                for i, (off, sess) in enumerate(zip(offsets, sessions), start=1):
+                    send_at = target - one_way + off / 1000
+                    t = threading.Thread(target=fire, args=(i, sess, send_at, off, target, results, False), daemon=True)
+                    t.start()
+                    threads.append(t)
+                
+                for t in threads: t.join(timeout=20)
+                state, text = check_state(sessions[0])
+                print(f"[Final status] {text}")
+                
+                if state == "approved":
+                    print("SUCCESS! Account is approved. You can stop the container.")
+                    break
+                
+                print("Sleeping until tomorrow's attempt window...")
+                time.sleep(3600)
+
+        if __name__ == "__main__":
+            sys.exit(main())
+        EOF
+
+        python /app/hyperos_unlock_request.py --log /app/logs/attempts.log
+    environment:
+      PYTHONUNBUFFERED: "1"
+      COOKIE_DATA: "new_bbs_serviceToken=YOUR_TOKEN_HERE;"
