@@ -1,5 +1,5 @@
-[![TrueNAS Compatible](https://shields.io)](https://truenas.com)
-[![AI-Assisted Setup](https://shields.io)](https://github.com)
+[![TrueNAS Compatible](https://img.shields.io/badge/TrueNAS-Custom%20App-blue?style=flat-square&logo=truenas)](https://www.truenas.com/)
+[![AI-Assisted Setup](https://img.shields.io/badge/Written%20with-AI-purple?style=flat-square)](https://github.com/hediondom/hyperos-unlock-request)
 
 > [!NOTE]
 > **TrueNAS & Self-Contained Deployment Variant**
