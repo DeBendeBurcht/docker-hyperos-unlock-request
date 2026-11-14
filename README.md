@@ -1,3 +1,18 @@
+[![TrueNAS Compatible](https://img.shields.io/badge/TrueNAS-Custom%20App-blue?style=flat-square&logo=truenas)](https://www.truenas.com/)
+[![AI-Assisted Setup](https://img.shields.io/badge/Written%20with-AI-purple?style=flat-square)](https://github.com/hediondom/hyperos-unlock-request)
+
+> [!NOTE]
+> **TrueNAS & Self-Contained Deployment Variant**
+> 
+> This fork includes an embedded, self-contained Docker Compose deployment configured specifically for **TrueNAS Custom Apps**. It avoids external `git` clone dependencies by writing the Python script locally on boot, executing an automated **one-time live test request** to verify your token and network path, and then transitioning into a permanent 24/7 midnight sniper loop (`restart: unless-stopped`).
+> 
+> * **AI Assistance Notice:** This deployment wrapper and configuration were generated with AI assistance to streamline TrueNAS containerization.
+> * **Disclaimer:** Use this tool entirely at your own risk. The author and contributors are **not liable** for any device bricks, account bans, Xiaomi server restrictions, warranty voids, or data loss resulting from its use.
+
+---
+
+
+
 # hyperos-unlock-request
 
 Get the **Xiaomi Community bootloader unlock permission** (HyperOS, Global devices) by sending the
