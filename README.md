@@ -4,12 +4,18 @@
 > [!NOTE]
 > **TrueNAS & Self-Contained Deployment Variant**
 > 
-> This fork includes an embedded, self-contained Docker Compose deployment configured specifically for **TrueNAS Custom Apps**. It avoids external `git` clone dependencies by writing the Python script locally on boot, executing an automated **one-time live test request** to verify your token and network path, and then transitioning into a permanent 24/7 midnight sniper loop (`restart: unless-stopped`).
+> This fork includes an embedded, self-contained Docker Compose deployment configured specifically for **TrueNAS Custom Apps**. It avoids external `git` clone dependencies by writing the Python script locally on boot, executing an automated **one-time live test request** to verify your token and network path, and then transitioning into an automated midnight sniper loop until approved.
+> 
+> **Quick Setup & Behavior:**
+> 1. Copy the contents of [`docker-compose.yml`](./docker-compose.yml) into a new **TrueNAS Custom App** (Install via YAML).
+> 2. Paste your `new_bbs_serviceToken` into the `COOKIE_DATA` environment variable at the bottom of the file (see [Getting your cookie](#getting-your-cookie) below) and deploy.
+> 3. **Auto-Shutdown on Success:** The container runs hands-free every night at `00:00:00` Beijing time. Once your account is approved, the script exits cleanly (`exit 0`) and `restart: "on-failure"` automatically stops the container so it stops sending requests. *(Note: Xiaomi does not send an approval email—check the container logs or see the app stop to confirm success.)*
 > 
 > * **AI Assistance Notice:** This deployment wrapper and configuration were generated with AI assistance to streamline TrueNAS containerization.
 > * **Disclaimer:** Use this tool entirely at your own risk. The author and contributors are **not liable** for any device bricks, account bans, Xiaomi server restrictions, warranty voids, or data loss resulting from its use.
 
 ---
+
 
 
 
