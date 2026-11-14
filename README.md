@@ -21,7 +21,7 @@
 >    * **Uncheck "Hide Standard Output"** so TrueNAS emails the message once the container stops. *(Delete the Cron Job after receiving your approval email).*
 >    * **Verify your Cron Job (Optional):** To test that TrueNAS properly detects the running container before switching to the alert command above, temporarily run this inverse command with **Run Now**:
 >      ```bash
->      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'hyperos|unlocker' && echo "TEST SUCCESS: TrueNAS sees the running xiaomi-unlocker container!"
+>      docker ps --format '{{.Names}} {{.Image}}' | grep -qiE 'hyperos|unlocker' && echo "TEST SUCCESS: TrueNAS sees the running hyperos-unlocker container!"
 >      ```
 >      Once you receive the test email, switch `&&` back to `||` with the approval message above so it stays silent until the container stops.
 > 
