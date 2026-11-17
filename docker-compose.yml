@@ -40,7 +40,7 @@ services:
         BODY = json.dumps({"is_retry": False})
         BEIJING = timezone(timedelta(hours=8))
         NTP_SERVERS = ("time.google.com", "pool.ntp.org", "time.windows.com")
-        DEFAULT_OFFSETS_MS = [30, 60, 100, 150, 200, 300]
+        DEFAULT_OFFSETS_MS = [30, 60, 100]
 
         ntp_offset = 0.0
         _anchor_wall = time.time()
@@ -197,7 +197,7 @@ services:
                 target = next_beijing_midnight()
                 print(f"[Target] Next reset at 00:00:00 Beijing = {fmt_local(target)}")
                 
-                offsets = [30, 60, 100, 150, 200, 300]
+                offsets = DEFAULT_OFFSETS_MS
                 sessions = [make_session(cookie) for _ in offsets]
 
                 def countdown_until(t_stop: float) -> None:
